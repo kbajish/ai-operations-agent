@@ -1,0 +1,16 @@
+/mlruns/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+dist/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
