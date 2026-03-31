@@ -16,7 +16,7 @@ def query_erp(question: str) -> dict:
         resp = requests.post(
             f"{ERP_API_URL}/query",
             json    = {"question": question},
-            timeout = 60
+            timeout = 180
         )
         return resp.json()
     except Exception as e:

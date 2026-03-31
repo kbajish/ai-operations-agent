@@ -82,6 +82,12 @@ The Streamlit dashboard provides:
 
 ---
 
+## 📸 Dashboard
+
+[View full dashboard screenshot](docs/dashboard_screenshot.pdf)
+
+---
+
 ## 🛠 Tech Stack
 
 | Layer | Tool |
