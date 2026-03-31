@@ -5,18 +5,20 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Docker](https://img.shields.io/badge/docker-compose-blue)
 
-A multi-agent procurement decision support system that orchestrates specialised AI agents using LangGraph as the state machine and CrewAI for role-based agent execution. When a user submits a procurement query, the system decomposes it into sequential reasoning steps, calls the supply chain forecasting API for demand and risk data, queries the ERP RAG system for business context, synthesises the results, and generates a structured Buy / Hold / Escalate recommendation with full reasoning trace.
+A multi-agent procurement decision support system that orchestrates specialised AI agents using LangGraph as the state machine. When a user submits a procurement query, the system decomposes it into sequential reasoning steps across five defined agent nodes, calls the supply chain forecasting API for demand and risk data, queries the ERP RAG system for business context, synthesises the results, and generates a structured Buy / Hold / Escalate recommendation with full reasoning trace.
+
+This project demonstrates the architecture and agent orchestration patterns of a multi-agent procurement system. It is intended as a reference implementation and learning resource, not a deployment-ready system.
 
 ---
 
 ## 🚀 Key Features
 
 - 🔗 LangGraph state machine — explicit nodes, conditional edges, deterministic agent flow
-- 🤖 CrewAI role-based agents — Supply Chain Analyst, ERP Analyst, Procurement Decision Maker
+- 🤖 Specialised agent nodes — Supply Chain Analyst, ERP Analyst, Synthesiser, Decision Maker
 - 🔧 Real API tool integration — live calls to Project 3 (supply chain) and Project 2 (ERP RAG)
 - 📋 Structured decisions — Buy / Hold / Escalate with confidence score and reasoning chain
 - 🔍 Agent trace viewer — Streamlit shows every reasoning step and tool call
-- 📉 MLflow run logging — full agent trace per query with latency per node
+- 📉 MLflow run logging — full agent trace per query
 - 🧪 Mock mode — offline tool stubs for CI and demos without live APIs
 - ⚡ FastAPI backend (`/agent/query`, `/agent/health`)
 - 🐳 Docker Compose for full-stack deployment
@@ -31,14 +33,11 @@ User procurement query
         ↓
 LangGraph state machine
         ↓
-        ├── Node 1: Query classifier
-        ├── Node 2: Supply Chain Analyst (CrewAI)
-        │          └── Tool: Project 3 /forecast + /risk/alerts
-        ├── Node 3: ERP Business Analyst (CrewAI)
-        │          └── Tool: Project 2 /query
-        ├── Node 4: Synthesis agent (CrewAI)
-        └── Node 5: Procurement Decision Maker (CrewAI)
-                   └── Buy / Hold / Escalate + justification
+        ├── Node 1: classify      — query classifier, extracts product ID
+        ├── Node 2: sc_agent      — calls Project 3 /forecast + /risk/alerts
+        ├── Node 3: erp_agent     — calls Project 2 /query RAG API
+        ├── Node 4: synthesise    — combines SC + ERP context
+        └── Node 5: decide        — generates Buy / Hold / Escalate decision
         ↓
 api/main.py              — FastAPI (/agent/query, /agent/health)
         ↓
@@ -51,7 +50,7 @@ MLflow                   — agent run logging
 
 ## ⚙️ How It Works
 
-A user submits a natural language procurement query. LangGraph routes it through a defined sequence of agent nodes. The Supply Chain Analyst agent calls the Project 3 API to retrieve 28-day demand forecasts and supplier risk alerts. The ERP Analyst agent queries the Project 2 RAG system for relevant business context such as current stock levels, open orders, and revenue metrics. A Synthesis agent combines both outputs into a unified context. The Procurement Decision Maker agent reasons over the combined data and produces a structured Buy / Hold / Escalate recommendation with a confidence score and justification.
+A user submits a natural language procurement query. LangGraph routes it through a defined sequence of five agent nodes. The SC Analyst node calls the Project 3 API to retrieve 28-day demand forecasts and supplier risk alerts. The ERP Analyst node queries the Project 2 RAG system for relevant business context such as current stock levels, open orders, and revenue metrics. The Synthesiser node combines both outputs into a unified context. The Decision node reasons over the combined data and produces a structured Buy / Hold / Escalate recommendation with a confidence score and justification.
 
 The full reasoning trace — every node, tool call, and intermediate result — is logged to MLflow and displayed step by step in the Streamlit dashboard, providing complete transparency into the agent's decision process.
 
@@ -75,8 +74,7 @@ The full reasoning trace — every node, tool call, and intermediate result — 
 The Streamlit dashboard provides:
 
 - 💬 Query input for natural language procurement questions
-- 🔍 Step-by-step agent reasoning trace
-- 🔧 Tool call history with inputs and outputs
+- 🔍 Step-by-step agent reasoning trace with colour-coded nodes
 - 📋 Final structured recommendation panel
 - 📉 MLflow run summary per query
 
@@ -87,8 +85,7 @@ The Streamlit dashboard provides:
 | Layer | Tool |
 |---|---|
 | Orchestration | LangGraph |
-| Agents | CrewAI |
-| LLM | Ollama (llama3.2, local) |
+| Agent nodes | LangChain + Ollama (llama3.2, local) |
 | Tool APIs | Project 3 supply chain API + Project 2 ERP RAG API |
 | Backend | FastAPI, Uvicorn |
 | Dashboard | Streamlit |
@@ -106,11 +103,7 @@ ai-operations-agent/
 │
 ├── src/
 │   ├── graph/
-│   │   └── workflow.py            # LangGraph state machine
-│   ├── agents/
-│   │   ├── sc_analyst.py          # Supply chain CrewAI agent
-│   │   ├── erp_analyst.py         # ERP RAG CrewAI agent
-│   │   └── decision.py            # Procurement decision agent
+│   │   └── workflow.py            # LangGraph state machine — all 5 agent nodes
 │   └── tools/
 │       ├── sc_tools.py            # Project 3 API tool wrappers
 │       ├── erp_tools.py           # Project 2 API tool wrappers
@@ -196,7 +189,7 @@ Set `USE_MOCK_TOOLS=true` in your `.env` file to run the agent without live Proj
 
 ---
 
-## 📈 Future Improvements
+## 📈 Possible Extensions
 
 - Add Project 1 cyber threat alerts as a third tool (security-aware procurement)
 - Human-in-the-loop approval node for high-value decisions
@@ -208,4 +201,4 @@ Set `USE_MOCK_TOOLS=true` in your `.env` file to run the agent without live Proj
 
 ## 👤 Author
 
-Experienced IT professional with a background in development, cybersecurity, and ERP systems, with expertise in Industrial AI. Focused on building production-ready AI systems with explainability, LLM integration, and MLOps best practices.
+Experienced IT professional with a background in development, cybersecurity, and ERP systems, with expertise in Industrial AI. Focused on building well-engineered AI systems with explainability, LLM integration, and MLOps practices.
