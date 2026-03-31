@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Docker](https://img.shields.io/badge/docker-compose-blue)
 
-A multi-agent procurement decision support system that orchestrates specialised AI agents using LangGraph as the state machine. When a user submits a procurement query, the system decomposes it into sequential reasoning steps across five defined agent nodes, calls the supply chain forecasting API for demand and risk data, queries the ERP RAG system for business context, synthesises the results, and generates a structured Buy / Hold / Escalate recommendation with full reasoning trace.
+A multi-agent procurement decision support system that orchestrates specialised AI agents using LangGraph as the state machine. When a user submits a procurement query, the system decomposes it into sequential reasoning steps across five defined agent nodes, calls the supply chain forecasting service for demand and risk data, queries the ERP intelligence service for business context, synthesises the results, and generates a structured Buy / Hold / Escalate recommendation with full reasoning trace.
 
 This project demonstrates the architecture and agent orchestration patterns of a multi-agent procurement system. It is intended as a reference implementation and learning resource, not a deployment-ready system.
 
@@ -15,11 +15,11 @@ This project demonstrates the architecture and agent orchestration patterns of a
 
 - 🔗 LangGraph state machine — explicit nodes, conditional edges, deterministic agent flow
 - 🤖 Specialised agent nodes — Supply Chain Analyst, ERP Analyst, Synthesiser, Decision Maker
-- 🔧 Real API tool integration — live calls to Project 3 (supply chain) and Project 2 (ERP RAG)
+- 🔧 Service tool integration — calls the supply chain forecasting service ([ai-supply-chain-forecasting](https://github.com/kbajish/ai-supply-chain-forecasting)) and ERP intelligence service ([erp-llm-intelligence-rag](https://github.com/kbajish/erp-llm-intelligence-rag))
 - 📋 Structured decisions — Buy / Hold / Escalate with confidence score and reasoning chain
 - 🔍 Agent trace viewer — Streamlit shows every reasoning step and tool call
 - 📉 MLflow run logging — full agent trace per query
-- 🧪 Mock mode — offline tool stubs for CI and demos without live APIs
+- 🧪 Mock mode — offline tool stubs for CI and demos without live services
 - ⚡ FastAPI backend (`/agent/query`, `/agent/health`)
 - 🐳 Docker Compose for full-stack deployment
 - 🔄 GitHub Actions CI/CD
@@ -34,8 +34,10 @@ User procurement query
 LangGraph state machine
         ↓
         ├── Node 1: classify      — query classifier, extracts product ID
-        ├── Node 2: sc_agent      — calls Project 3 /forecast + /risk/alerts
-        ├── Node 3: erp_agent     — calls Project 2 /query RAG API
+        ├── Node 2: sc_agent      — calls supply chain forecasting service
+        │                           /forecast + /risk/alerts endpoints
+        ├── Node 3: erp_agent     — calls ERP intelligence service
+        │                           /query RAG endpoint
         ├── Node 4: synthesise    — combines SC + ERP context
         └── Node 5: decide        — generates Buy / Hold / Escalate decision
         ↓
@@ -50,7 +52,7 @@ MLflow                   — agent run logging
 
 ## ⚙️ How It Works
 
-A user submits a natural language procurement query. LangGraph routes it through a defined sequence of five agent nodes. The SC Analyst node calls the Project 3 API to retrieve 28-day demand forecasts and supplier risk alerts. The ERP Analyst node queries the Project 2 RAG system for relevant business context such as current stock levels, open orders, and revenue metrics. The Synthesiser node combines both outputs into a unified context. The Decision node reasons over the combined data and produces a structured Buy / Hold / Escalate recommendation with a confidence score and justification.
+A user submits a natural language procurement query. LangGraph routes it through a defined sequence of five agent nodes. The SC Analyst node calls the supply chain forecasting service ([ai-supply-chain-forecasting](https://github.com/kbajish/ai-supply-chain-forecasting)) to retrieve 28-day demand forecasts and supplier risk alerts. The ERP Analyst node queries the ERP intelligence service ([erp-llm-intelligence-rag](https://github.com/kbajish/erp-llm-intelligence-rag)) for relevant business context such as current stock levels, open orders, and revenue metrics. The Synthesiser node combines both outputs into a unified context. The Decision node reasons over the combined data and produces a structured Buy / Hold / Escalate recommendation with a confidence score and justification.
 
 The full reasoning trace — every node, tool call, and intermediate result — is logged to MLflow and displayed step by step in the Streamlit dashboard, providing complete transparency into the agent's decision process.
 
@@ -86,7 +88,8 @@ The Streamlit dashboard provides:
 |---|---|
 | Orchestration | LangGraph |
 | Agent nodes | LangChain + Ollama (llama3.2, local) |
-| Tool APIs | Project 3 supply chain API + Project 2 ERP RAG API |
+| Supply chain service | [ai-supply-chain-forecasting](https://github.com/kbajish/ai-supply-chain-forecasting) |
+| ERP intelligence service | [erp-llm-intelligence-rag](https://github.com/kbajish/erp-llm-intelligence-rag) |
 | Backend | FastAPI, Uvicorn |
 | Dashboard | Streamlit |
 | Experiment tracking | MLflow |
@@ -105,8 +108,8 @@ ai-operations-agent/
 │   ├── graph/
 │   │   └── workflow.py            # LangGraph state machine — all 5 agent nodes
 │   └── tools/
-│       ├── sc_tools.py            # Project 3 API tool wrappers
-│       ├── erp_tools.py           # Project 2 API tool wrappers
+│       ├── sc_tools.py            # Supply chain service tool wrappers
+│       ├── erp_tools.py           # ERP intelligence service tool wrappers
 │       └── mock_tools.py          # Mock tools for CI / offline demo
 │
 ├── api/
@@ -154,8 +157,9 @@ source .venv/bin/activate     # Linux/Mac
 
 ### 3. Start dependent services (optional — for live API mode)
 ```bash
-# Start Project 2 ERP RAG API on port 8001
-# Start Project 3 Supply Chain API on port 8002
+# Clone and start ai-supply-chain-forecasting on port 8002
+# Clone and start erp-llm-intelligence-rag on port 8001
+# Or set USE_MOCK_TOOLS=true in .env to use mock mode
 ```
 
 ### 4. Start all services
@@ -185,13 +189,13 @@ docker compose up --build
 
 ## 🔧 Mock Mode
 
-Set `USE_MOCK_TOOLS=true` in your `.env` file to run the agent without live Project 2 and Project 3 APIs. Mock tools return realistic synthetic responses — useful for CI, offline demos, and development.
+Set `USE_MOCK_TOOLS=true` in your `.env` file to run the agent without the supply chain and ERP services running. Mock tools return realistic synthetic responses — useful for CI, offline demos, and development.
 
 ---
 
 ## 📈 Possible Extensions
 
-- Add Project 1 cyber threat alerts as a third tool (security-aware procurement)
+- Add the AI Security Gateway as a fourth tool for threat-aware procurement
 - Human-in-the-loop approval node for high-value decisions
 - LangSmith / AgentOps observability integration
 - Persistent agent memory across sessions
