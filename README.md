@@ -7,7 +7,7 @@
 
 A multi-agent procurement decision support system that orchestrates specialised AI agents using LangGraph as the state machine. When a user submits a procurement query, the system decomposes it into sequential reasoning steps across five defined agent nodes, calls the supply chain forecasting service for demand and risk data, queries the ERP intelligence service for business context, synthesises the results, and generates a structured Buy / Hold / Escalate recommendation with full reasoning trace.
 
-This project demonstrates the architecture and agent orchestration patterns of a multi-agent procurement system. It is intended as a reference implementation and learning resource, not a deployment-ready system.
+Designed as a reference implementation of production-grade LLM agent orchestration patterns.
 
 ---
 
@@ -15,14 +15,18 @@ This project demonstrates the architecture and agent orchestration patterns of a
 
 - 🔗 LangGraph state machine — explicit nodes, conditional edges, deterministic agent flow
 - 🤖 Specialised agent nodes — Supply Chain Analyst, ERP Analyst, Synthesiser, Decision Maker
-- 🔧 Service tool integration — calls the supply chain forecasting service ([ai-supply-chain-forecasting](https://github.com/kbajish/ai-supply-chain-forecasting)) and ERP intelligence service ([erp-llm-intelligence-rag](https://github.com/kbajish/erp-llm-intelligence-rag))
-- 📋 Structured decisions — Buy / Hold / Escalate with confidence score and reasoning chain
+- 🔧 Service tool integration — calls [ai-supply-chain-forecasting](https://github.com/kbajish/ai-supply-chain-forecasting) and [erp-llm-intelligence-rag](https://github.com/kbajish/erp-llm-intelligence-rag) as live tools
+- 📋 Structured decisions — Buy / Hold / Escalate with float confidence score and reasoning chain
+- 🛡️ Input validation — rejects empty, malformed, and unsafe queries before processing
+- 🔒 Tool access control — agent restricted to predefined permitted tools only
+- 🔄 Resilient tool calls — try/except on all external calls with safe fallback responses
+- 🔍 Regex-based decision parsing — robust extraction of DECISION, CONFIDENCE, REASONING
 - 🔍 Agent trace viewer — Streamlit shows every reasoning step and tool call
 - 📉 MLflow run logging — full agent trace per query
 - 🧪 Mock mode — offline tool stubs for CI and demos without live services
-- ⚡ FastAPI backend (`/agent/query`, `/agent/health`)
+- ⚡ Async FastAPI backend — non-blocking with threadpool offloading (`/agent/query`, `/agent/health`)
 - 🐳 Docker Compose for full-stack deployment
-- 🔄 GitHub Actions CI/CD
+- 🔄 GitHub Actions CI/CD — 15 tests passing
 
 ---
 
@@ -30,6 +34,8 @@ This project demonstrates the architecture and agent orchestration patterns of a
 
 ```
 User procurement query
+        ↓
+Input validation (length, content, unsafe pattern detection)
         ↓
 LangGraph state machine
         ↓
@@ -52,9 +58,11 @@ MLflow                   — agent run logging
 
 ## ⚙️ How It Works
 
-A user submits a natural language procurement query. LangGraph routes it through a defined sequence of five agent nodes. The SC Analyst node calls the supply chain forecasting service ([ai-supply-chain-forecasting](https://github.com/kbajish/ai-supply-chain-forecasting)) to retrieve 28-day demand forecasts and supplier risk alerts. The ERP Analyst node queries the ERP intelligence service ([erp-llm-intelligence-rag](https://github.com/kbajish/erp-llm-intelligence-rag)) for relevant business context such as current stock levels, open orders, and revenue metrics. The Synthesiser node combines both outputs into a unified context. The Decision node reasons over the combined data and produces a structured Buy / Hold / Escalate recommendation with a confidence score and justification.
+A user submits a natural language procurement query. Before entering the workflow, the query is validated for length, content, and unsafe patterns — prompt injection attempts and malformed inputs are rejected immediately. LangGraph then routes the validated query through a defined sequence of five agent nodes.
 
-The full reasoning trace — every node, tool call, and intermediate result — is logged to MLflow and displayed step by step in the Streamlit dashboard, providing complete transparency into the agent's decision process.
+The SC Analyst node calls the supply chain forecasting service to retrieve 28-day demand forecasts and supplier risk alerts. The ERP Analyst node queries the ERP intelligence service for relevant business context such as current stock levels, open orders, and revenue metrics. The Synthesiser node combines both outputs into a unified context. The Decision node reasons over the combined data and produces a structured Buy / Hold / Escalate recommendation with a confidence score and justification.
+
+All external tool calls are wrapped in try/except blocks with safe fallback responses — the workflow completes even if a downstream service is unavailable. Decision parsing uses regex extraction to reliably handle varying LLM output formats. The full reasoning trace is logged to MLflow and displayed step by step in the Streamlit dashboard.
 
 ---
 
@@ -71,13 +79,78 @@ The full reasoning trace — every node, tool call, and intermediate result — 
 
 ---
 
+## 📊 Evaluation Results
+
+Evaluated against 14 test queries — 10 valid procurement queries and 4 invalid inputs designed to test rejection logic. All tests run with `USE_MOCK_TOOLS=true` via `tests/eval/run_evaluation.py`.
+
+### Execution Metrics
+
+| Metric | Value |
+|---|---|
+| Total queries tested | 14 |
+| Successful API calls | 14 (100%) |
+| Valid queries completed | 10 / 10 (100%) |
+| Invalid queries rejected | 4 / 4 (100%) |
+| Steps per valid query | 5 (fixed workflow) |
+| LLM calls per valid query | 4 (sc_agent, erp_agent, synthesise, decide) |
+
+### Decision Distribution (10 valid queries)
+
+```
+BUY        6  ██████
+HOLD       6  ██████
+ESCALATE   1  █
+```
+
+### Input Validation
+
+| Query Type | Result |
+|---|---|
+| Empty string | Rejected — HTTP 400 (FastAPI validation) |
+| Too short (`buy?`) | Rejected — workflow length check |
+| Prompt injection attempt | Rejected — unsafe pattern detected |
+| Oversized input (2000+ chars) | Rejected — length validation |
+
+---
+
+## ⚡ Performance
+
+Measured with `USE_MOCK_TOOLS=true`, Ollama llama3.2 on CPU, Windows local environment.
+
+| Layer | Latency |
+|---|---|
+| Input validation (rejected queries) | ~150–200ms |
+| Full 5-step pipeline (mock tools, CPU LLM) | ~52,000–81,000ms |
+| Mean end-to-end latency | ~68,000ms |
+
+The agent executes a fixed 5-step workflow. Each valid query involves 4 sequential LLM inference calls — overall latency is entirely dominated by CPU-based LLM response time.
+
+**Note:** With GPU inference or a cloud LLM API (e.g. Groq), each LLM call drops from ~15s to ~1–2s, reducing total pipeline latency to approximately 5–10s per query.
+
+---
+
+## 🔧 Implementation Notes
+
+**Input validation** — queries are validated for minimum length (10 chars), maximum length (2000 chars), and unsafe content patterns (prompt injection, jailbreak attempts) before entering the workflow. Invalid queries are rejected immediately with a clear error message.
+
+**Tool access control** — all tool calls go through a central `call_tool()` registry. Only tools registered in `PERMITTED_TOOLS` can be invoked — any attempt to call an unregistered function raises a `ValueError` before execution.
+
+**Resilient tool calls** — every external service call (`get_demand_forecast`, `get_risk_alerts`, `query_erp`) is wrapped in try/except. On failure, the node returns a safe fallback response and the workflow continues to completion rather than crashing.
+
+**Regex decision parsing** — the LLM decision output is parsed using regex patterns for `DECISION`, `CONFIDENCE`, and `REASONING` fields. This is robust to formatting variations in LLM output. Confidence is stored as a float clamped to [0.0, 1.0]. Safe defaults (HOLD, 0.5) apply if parsing fails.
+
+**Async FastAPI endpoint** — the `/agent/query` endpoint is fully async using `run_in_threadpool` to offload the LangGraph workflow execution. This keeps the event loop free for concurrent requests. MLflow logging runs in a background daemon thread so it never adds latency to the response cycle.
+
+---
+
 ## 📊 Dashboard Overview
 
 The Streamlit dashboard provides:
 
 - 💬 Query input for natural language procurement questions
 - 🔍 Step-by-step agent reasoning trace with colour-coded nodes
-- 📋 Final structured recommendation panel
+- 📋 Final structured recommendation panel with confidence percentage
+- ⚠️ Error display for rejected or failed queries
 - 📉 MLflow run summary per query
 
 ---
@@ -96,12 +169,12 @@ The Streamlit dashboard provides:
 | Agent nodes | LangChain + Ollama (llama3.2, local) |
 | Supply chain service | [ai-supply-chain-forecasting](https://github.com/kbajish/ai-supply-chain-forecasting) |
 | ERP intelligence service | [erp-llm-intelligence-rag](https://github.com/kbajish/erp-llm-intelligence-rag) |
-| Backend | FastAPI, Uvicorn |
+| Backend | FastAPI (async endpoints), Uvicorn |
 | Dashboard | Streamlit |
 | Experiment tracking | MLflow |
 | Containerisation | Docker Compose |
 | CI/CD | GitHub Actions |
-| Testing | pytest |
+| Testing | pytest (15 tests) |
 
 ---
 
@@ -112,7 +185,8 @@ ai-operations-agent/
 │
 ├── src/
 │   ├── graph/
-│   │   └── workflow.py            # LangGraph state machine — all 5 agent nodes
+│   │   └── workflow.py            # LangGraph state machine — all 5 agent nodes,
+│   │                              # input validation, tool access control
 │   └── tools/
 │       ├── sc_tools.py            # Supply chain service tool wrappers
 │       ├── erp_tools.py           # ERP intelligence service tool wrappers
@@ -125,8 +199,10 @@ ai-operations-agent/
 │   └── app.py                     # Streamlit trace viewer
 │
 ├── tests/
-│   ├── test_tools.py              # Tool wrapper tests
-│   └── test_imports.py            # CI-safe import tests
+│   ├── test_tools.py              # Robustness and validation tests (10 tests)
+│   ├── test_imports.py            # CI-safe import tests (5 tests)
+│   └── eval/
+│       └── run_evaluation.py      # Evaluation and latency benchmark script
 │
 ├── .github/
 │   └── workflows/
@@ -161,11 +237,11 @@ python -m venv .venv
 source .venv/bin/activate     # Linux/Mac
 ```
 
-### 3. Start dependent services (optional — for live API mode)
+### 3. Configure environment
 ```bash
-# Clone and start ai-supply-chain-forecasting on port 8002
-# Clone and start erp-llm-intelligence-rag on port 8001
-# Or set USE_MOCK_TOOLS=true in .env to use mock mode
+cp .env.example .env
+# Set USE_MOCK_TOOLS=true for offline mode (default)
+# Set SC_API_URL and ERP_API_URL for live service integration
 ```
 
 ### 4. Start all services
@@ -190,6 +266,20 @@ docker compose up --build
 |--------|-----------------|--------------------------------------------------|
 | `POST` | `/agent/query`  | Run procurement agent — returns trace + decision |
 | `GET`  | `/agent/health` | Health check                                     |
+
+---
+
+## 🧪 Tests
+
+```bash
+# Unit tests
+pytest tests/ -v
+# 15 passed
+
+# Evaluation suite (requires API running)
+python tests/eval/run_evaluation.py
+# 14 queries — 100% success rate, 4/4 invalid queries rejected
+```
 
 ---
 
