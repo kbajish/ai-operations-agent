@@ -98,7 +98,7 @@ Evaluated against 14 test queries — 10 valid procurement queries and 4 invalid
 
 ```
 BUY        6  ██████
-HOLD       6  ██████
+HOLD       3  ██████
 ESCALATE   1  █
 ```
 
@@ -120,12 +120,13 @@ Measured with `USE_MOCK_TOOLS=true`, Ollama llama3.2 on CPU, Windows local envir
 | Layer | Latency |
 |---|---|
 | Input validation (rejected queries) | ~150–200ms |
-| Full 5-step pipeline (mock tools, CPU LLM) | ~52,000–81,000ms |
-| Mean end-to-end latency | ~68,000ms |
+| Full 5-step pipeline (mock tools, CPU LLM) | 52–81s (4 sequential LLM calls) |
+| Per LLM call (CPU, llama3.2) | ~15–20s |
 
-The agent executes a fixed 5-step workflow. Each valid query involves 4 sequential LLM inference calls — overall latency is entirely dominated by CPU-based LLM response time.
+Latency is dominated by CPU-based LLM inference (~15–20s per call). The pipeline makes 4 sequential LLM calls — one per agent node (sc_agent, erp_agent, synthesise, decide). Total pipeline latency directly reflects this.
 
-**Note:** With GPU inference or a cloud LLM API (e.g. Groq), each LLM call drops from ~15s to ~1–2s, reducing total pipeline latency to approximately 5–10s per query.
+**With GPU or cloud LLM (e.g. Groq):**
+Each LLM call drops to ~1–2s → expected total pipeline latency ~5–10s per query.
 
 ---
 
