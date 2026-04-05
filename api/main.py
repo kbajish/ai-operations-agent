@@ -22,10 +22,11 @@ class QueryResponse(BaseModel):
     query:      str
     product_id: str
     decision:   str
-    confidence: str
+    confidence: float
     reasoning:  str
     synthesis:  str
     trace:      list
+    error:      str
 
 
 @app.get("/agent/health")
@@ -47,7 +48,7 @@ def agent_query(req: QueryRequest):
 
             mlflow.log_param("product_id", result["product_id"])
             mlflow.log_param("decision",   result["decision"])
-            mlflow.log_metric("confidence", float(result["confidence"]) if result["confidence"].replace(".", "").isdigit() else 0.5)
+            mlflow.log_metric("confidence", result["confidence"])
             mlflow.log_metric("trace_steps", len(result["trace"]))
 
         return QueryResponse(
@@ -57,7 +58,8 @@ def agent_query(req: QueryRequest):
             confidence = result["confidence"],
             reasoning  = result["reasoning"],
             synthesis  = result["synthesis"],
-            trace      = result["trace"]
+            trace      = result["trace"],
+            error      = result.get("error", ""),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

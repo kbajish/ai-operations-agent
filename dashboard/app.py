@@ -83,9 +83,12 @@ if st.session_state["last_result"]:
     else:
         st.warning(f"## Decision: {decision}")
 
+    if result.get("error"):
+        st.error(f"⚠️ {result['error']}")
+        
     col1, col2, col3 = st.columns(3)
     col1.metric("Decision",   result.get("decision",   "—"))
-    col2.metric("Confidence", result.get("confidence", "—"))
+    col2.metric("Confidence", f"{result.get('confidence', 0.0):.0%}")
     col3.metric("Product",    result.get("product_id", "—"))
 
     st.subheader("Reasoning")
